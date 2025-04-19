@@ -437,10 +437,6 @@ namespace excelconverter
                 return convertedData;
             }
 
-            // Log some data for debugging
-            Console.WriteLine($"Converting {data.Count} data points using {aggregationMethod} aggregation");
-            Console.WriteLine($"Input interval: {inputInterval}, Output interval: {outputInterval}");
-
             try
             {
                 // Group the data by the appropriate time interval
@@ -457,6 +453,7 @@ namespace excelconverter
 
                     var newPoint = new DataPoint
                     {
+                        // Use the group key as timestamp - this is crucial for the forward-rounding
                         Timestamp = group.Key
                     };
 
@@ -484,21 +481,8 @@ namespace excelconverter
                     convertedData.Add(newPoint);
                 }
 
-                Console.WriteLine($"Created {groupCount} groups, resulted in {convertedData.Count} data points");
-
-                // Log a few converted data points for verification
-                var sortedResults = convertedData.OrderBy(d => d.Timestamp).ToList();
-                if (sortedResults.Count > 0)
-                {
-                    Console.WriteLine("First 5 converted data points:");
-                    for (int i = 0; i < Math.Min(5, sortedResults.Count); i++)
-                    {
-                        Console.WriteLine($"{sortedResults[i].Timestamp:yyyy-MM-dd HH:mm:ss} - E.ON: {sortedResults[i].EonValue:F2}, Solar: {sortedResults[i].SolarValue:F2}");
-                    }
-                }
-
-                // Sort by timestamp
-                return sortedResults;
+                // Sort by timestamp and return
+                return convertedData.OrderBy(d => d.Timestamp).ToList();
             }
             catch (Exception ex)
             {
@@ -507,7 +491,6 @@ namespace excelconverter
                 return new List<DataPoint>();
             }
         }
-
         private IEnumerable<IGrouping<DateTime, DataPoint>> GroupDataByInterval(List<DataPoint> data, string interval)
         {
             // First sort the data by timestamp to ensure proper grouping
@@ -525,46 +508,120 @@ namespace excelconverter
                         0));
 
                 case "1 Hour":
-                    return sortedData.GroupBy(d => new DateTime(
-                        d.Timestamp.Year,
-                        d.Timestamp.Month,
-                        d.Timestamp.Day,
-                        d.Timestamp.Hour,
-                        0, 0));
+                    return sortedData.GroupBy(d => {
+                        // Special case: if already exactly on the hour (00:00), keep it at that hour
+                        if (d.Timestamp.Minute == 0 && d.Timestamp.Second == 0)
+                        {
+                            return new DateTime(
+                                d.Timestamp.Year,
+                                d.Timestamp.Month,
+                                d.Timestamp.Day,
+                                d.Timestamp.Hour,
+                                0, 0);
+                        }
+                        else
+                        {
+                            // Otherwise round up to the next hour
+                            return new DateTime(
+                                d.Timestamp.Year,
+                                d.Timestamp.Month,
+                                d.Timestamp.Day,
+                                d.Timestamp.Hour,
+                                0, 0).AddHours(1);
+                        }
+                    });
 
                 case "1 Day":
-                    return sortedData.GroupBy(d => d.Timestamp.Date);
+                    return sortedData.GroupBy(d => {
+                        // If already at midnight (00:00:00), keep it on that day
+                        if (d.Timestamp.Hour == 0 && d.Timestamp.Minute == 0 && d.Timestamp.Second == 0)
+                        {
+                            return d.Timestamp.Date;
+                        }
+                        else
+                        {
+                            return d.Timestamp.Date.AddDays(1);
+                        }
+                    });
 
                 case "1 Week":
                     return sortedData.GroupBy(d => {
-                        // Calculate the start of the week (Sunday)
-                        int diff = (int)d.Timestamp.DayOfWeek;
-                        return d.Timestamp.Date.AddDays(-1 * diff);
+                        // If already exactly on Sunday at 00:00:00, keep it on that week
+                        if (d.Timestamp.DayOfWeek == DayOfWeek.Sunday &&
+                            d.Timestamp.Hour == 0 && d.Timestamp.Minute == 0 && d.Timestamp.Second == 0)
+                        {
+                            return d.Timestamp.Date;
+                        }
+                        else
+                        {
+                            // Calculate days until next Sunday
+                            int daysUntilNextSunday = ((int)DayOfWeek.Sunday - (int)d.Timestamp.DayOfWeek + 7) % 7;
+                            if (daysUntilNextSunday == 0) daysUntilNextSunday = 7;  // If already Sunday but not at 00:00:00
+                            return d.Timestamp.Date.AddDays(daysUntilNextSunday);
+                        }
                     });
 
                 case "1 Month":
-                    return sortedData.GroupBy(d => new DateTime(
-                        d.Timestamp.Year,
-                        d.Timestamp.Month,
-                        1));
+                    return sortedData.GroupBy(d => {
+                        // If already on the 1st of the month at 00:00:00, keep it on that month
+                        if (d.Timestamp.Day == 1 && d.Timestamp.Hour == 0 &&
+                            d.Timestamp.Minute == 0 && d.Timestamp.Second == 0)
+                        {
+                            return new DateTime(d.Timestamp.Year, d.Timestamp.Month, 1);
+                        }
+                        else
+                        {
+                            // Otherwise go to first day of next month
+                            return new DateTime(
+                                d.Timestamp.Month == 12 ? d.Timestamp.Year + 1 : d.Timestamp.Year,
+                                d.Timestamp.Month == 12 ? 1 : d.Timestamp.Month + 1,
+                                1);
+                        }
+                    });
 
                 case "Quarter Year":
                     return sortedData.GroupBy(d => {
-                        int quarter = (d.Timestamp.Month - 1) / 3;
-                        return new DateTime(d.Timestamp.Year, quarter * 3 + 1, 1);
+                        int currentQuarter = (d.Timestamp.Month - 1) / 3;
+                        // If already on the first day of the quarter at 00:00:00
+                        if (d.Timestamp.Month == currentQuarter * 3 + 1 && d.Timestamp.Day == 1 &&
+                            d.Timestamp.Hour == 0 && d.Timestamp.Minute == 0 && d.Timestamp.Second == 0)
+                        {
+                            return new DateTime(d.Timestamp.Year, currentQuarter * 3 + 1, 1);
+                        }
+                        else
+                        {
+                            // Otherwise go to first day of next quarter
+                            int nextQuarterFirstMonth = (currentQuarter + 1) % 4 * 3 + 1;
+                            int yearAdjustment = (currentQuarter == 3) ? 1 : 0; // If Q4, move to Q1 of next year
+
+                            return new DateTime(d.Timestamp.Year + yearAdjustment, nextQuarterFirstMonth, 1);
+                        }
                     });
 
                 default:
-                    // Default to hourly if something unexpected happens
-                    return sortedData.GroupBy(d => new DateTime(
-                        d.Timestamp.Year,
-                        d.Timestamp.Month,
-                        d.Timestamp.Day,
-                        d.Timestamp.Hour,
-                        0, 0));
+                    // Default to hourly with special case handling
+                    return sortedData.GroupBy(d => {
+                        if (d.Timestamp.Minute == 0 && d.Timestamp.Second == 0)
+                        {
+                            return new DateTime(
+                                d.Timestamp.Year,
+                                d.Timestamp.Month,
+                                d.Timestamp.Day,
+                                d.Timestamp.Hour,
+                                0, 0);
+                        }
+                        else
+                        {
+                            return new DateTime(
+                                d.Timestamp.Year,
+                                d.Timestamp.Month,
+                                d.Timestamp.Day,
+                                d.Timestamp.Hour,
+                                0, 0).AddHours(1);
+                        }
+                    });
             }
         }
-
         private void DisplayResults(List<DataPoint> convertedData)
         {
             // Create a DataTable to hold the results
