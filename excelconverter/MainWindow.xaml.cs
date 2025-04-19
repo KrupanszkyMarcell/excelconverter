@@ -84,6 +84,14 @@ namespace excelconverter
             }
         }
 
+        private void InputSheet_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (cboInputSheet.SelectedItem != null && !string.IsNullOrEmpty(filePath))
+            {
+                LoadColumnNames();
+            }
+        }
+
         private void LoadColumnNames()
         {
             try
@@ -176,21 +184,53 @@ namespace excelconverter
 
             try
             {
+                // Validate input and output intervals
+                var inputInterval = ((ComboBoxItem)cboInputInterval.SelectedItem).Content.ToString();
+                var outputInterval = ((ComboBoxItem)cboOutputInterval.SelectedItem).Content.ToString();
+
+                // Check if the output interval is larger than or equal to the input interval
+                if (!IsOutputIntervalValid(inputInterval, outputInterval))
+                {
+                    MessageBox.Show("Output time interval must be equal to or larger than input time interval.",
+                        "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
                 // Read and convert the data
                 using (var package = new ExcelPackage(new FileInfo(filePath)))
                 {
                     var worksheet = package.Workbook.Worksheets[cboInputSheet.SelectedItem.ToString()];
                     var data = ReadExcelData(worksheet);
-                    var hourlyData = ConvertToHourlyData(data);
+                    var convertedData = ConvertData(data, inputInterval, outputInterval);
 
                     // Display results
-                    DisplayResults(hourlyData);
+                    DisplayResults(convertedData);
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error during conversion: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private bool IsOutputIntervalValid(string inputInterval, string outputInterval)
+        {
+            // Define time intervals in ascending order (smaller to larger)
+            var intervals = new List<string>
+            {
+                "15 Minutes",
+                "1 Hour",
+                "1 Day",
+                "1 Week",
+                "1 Month",
+                "Quarter Year"
+            };
+
+            int inputIndex = intervals.IndexOf(inputInterval);
+            int outputIndex = intervals.IndexOf(outputInterval);
+
+            // Output interval should be equal to or larger than input interval
+            return outputIndex >= inputIndex;
         }
 
         private List<DataPoint> ReadExcelData(ExcelWorksheet worksheet)
@@ -278,22 +318,17 @@ namespace excelconverter
             return data;
         }
 
-        private List<HourlyDataPoint> ConvertToHourlyData(List<DataPoint> data)
+        private List<DataPoint> ConvertData(List<DataPoint> data, string inputInterval, string outputInterval)
         {
-            var hourlyData = new List<HourlyDataPoint>();
+            var convertedData = new List<DataPoint>();
             var aggregationMethod = ((ComboBoxItem)cboAggregation.SelectedItem).Content.ToString();
 
-            // Group the data by date (day and hour)
-            var groupedData = data.GroupBy(d => new DateTime(
-                d.Timestamp.Year,
-                d.Timestamp.Month,
-                d.Timestamp.Day,
-                d.Timestamp.Hour,
-                0, 0));
+            // Group the data by the appropriate time interval
+            var groupedData = GroupDataByInterval(data, outputInterval);
 
             foreach (var group in groupedData)
             {
-                var hourlyPoint = new HourlyDataPoint
+                var newPoint = new DataPoint
                 {
                     Timestamp = group.Key
                 };
@@ -302,31 +337,89 @@ namespace excelconverter
                 switch (aggregationMethod)
                 {
                     case "Average":
-                        hourlyPoint.EonValue = group.Average(d => d.EonValue);
-                        hourlyPoint.SolarValue = group.Average(d => d.SolarValue);
+                        newPoint.EonValue = group.Average(d => d.EonValue);
+                        newPoint.SolarValue = group.Average(d => d.SolarValue);
                         break;
                     case "Sum":
-                        hourlyPoint.EonValue = group.Sum(d => d.EonValue);
-                        hourlyPoint.SolarValue = group.Sum(d => d.SolarValue);
+                        newPoint.EonValue = group.Sum(d => d.EonValue);
+                        newPoint.SolarValue = group.Sum(d => d.SolarValue);
                         break;
                     case "Max":
-                        hourlyPoint.EonValue = group.Max(d => d.EonValue);
-                        hourlyPoint.SolarValue = group.Max(d => d.SolarValue);
+                        newPoint.EonValue = group.Max(d => d.EonValue);
+                        newPoint.SolarValue = group.Max(d => d.SolarValue);
                         break;
                     case "Min":
-                        hourlyPoint.EonValue = group.Min(d => d.EonValue);
-                        hourlyPoint.SolarValue = group.Min(d => d.SolarValue);
+                        newPoint.EonValue = group.Min(d => d.EonValue);
+                        newPoint.SolarValue = group.Min(d => d.SolarValue);
                         break;
                 }
 
-                hourlyData.Add(hourlyPoint);
+                convertedData.Add(newPoint);
             }
 
             // Sort by timestamp
-            return hourlyData.OrderBy(d => d.Timestamp).ToList();
+            return convertedData.OrderBy(d => d.Timestamp).ToList();
         }
 
-        private void DisplayResults(List<HourlyDataPoint> hourlyData)
+        private IEnumerable<IGrouping<DateTime, DataPoint>> GroupDataByInterval(List<DataPoint> data, string interval)
+        {
+            switch (interval)
+            {
+                case "15 Minutes":
+                    return data.GroupBy(d => new DateTime(
+                        d.Timestamp.Year,
+                        d.Timestamp.Month,
+                        d.Timestamp.Day,
+                        d.Timestamp.Hour,
+                        15 * (d.Timestamp.Minute / 15), // Round to nearest 15 min
+                        0));
+
+                case "1 Hour":
+                    return data.GroupBy(d => new DateTime(
+                        d.Timestamp.Year,
+                        d.Timestamp.Month,
+                        d.Timestamp.Day,
+                        d.Timestamp.Hour,
+                        0, 0));
+
+                case "1 Day":
+                    return data.GroupBy(d => new DateTime(
+                        d.Timestamp.Year,
+                        d.Timestamp.Month,
+                        d.Timestamp.Day,
+                        0, 0, 0));
+
+                case "1 Week":
+                    return data.GroupBy(d => {
+                        // Calculate the start of the week (Sunday)
+                        int diff = (7 + (d.Timestamp.DayOfWeek - DayOfWeek.Sunday)) % 7;
+                        return d.Timestamp.Date.AddDays(-1 * diff);
+                    });
+
+                case "1 Month":
+                    return data.GroupBy(d => new DateTime(
+                        d.Timestamp.Year,
+                        d.Timestamp.Month,
+                        1, 0, 0, 0));
+
+                case "Quarter Year":
+                    return data.GroupBy(d => {
+                        int quarter = (d.Timestamp.Month - 1) / 3;
+                        return new DateTime(d.Timestamp.Year, quarter * 3 + 1, 1, 0, 0, 0);
+                    });
+
+                default:
+                    // Default to hourly if something unexpected happens
+                    return data.GroupBy(d => new DateTime(
+                        d.Timestamp.Year,
+                        d.Timestamp.Month,
+                        d.Timestamp.Day,
+                        d.Timestamp.Hour,
+                        0, 0));
+            }
+        }
+
+        private void DisplayResults(List<DataPoint> convertedData)
         {
             // Create a DataTable to hold the results
             resultsTable = new DataTable();
@@ -335,7 +428,7 @@ namespace excelconverter
             resultsTable.Columns.Add("Solar [kW]", typeof(double));
 
             // Add rows to the table
-            foreach (var point in hourlyData)
+            foreach (var point in convertedData)
             {
                 resultsTable.Rows.Add(
                     point.Timestamp,
@@ -362,16 +455,17 @@ namespace excelconverter
                 var saveFileDialog = new SaveFileDialog
                 {
                     Filter = "Excel Files|*.xlsx",
-                    Title = "Save Hourly Data",
-                    FileName = "Hourly_Data.xlsx"
+                    Title = "Save Converted Data",
+                    FileName = "Converted_Data.xlsx"
                 };
 
                 if (saveFileDialog.ShowDialog() == true)
                 {
                     using (var package = new ExcelPackage())
                     {
-                        // Create a new worksheet
-                        var worksheet = package.Workbook.Worksheets.Add("Hourly Data");
+                        // Create a new worksheet or use the specified output sheet
+                        var worksheetName = cboOutputSheet.SelectedItem?.ToString() ?? "Converted Data";
+                        var worksheet = package.Workbook.Worksheets.Add(worksheetName);
 
                         // Add headers
                         worksheet.Cells[1, 1].Value = "Timestamp";
@@ -383,7 +477,7 @@ namespace excelconverter
                         {
                             var row = resultsTable.Rows[i];
                             worksheet.Cells[i + 2, 1].Value = (DateTime)row["Timestamp"];
-                            worksheet.Cells[i + 2, 1].Style.Numberformat.Format = "yyyy-MM-dd HH:mm";
+                            worksheet.Cells[i + 2, 1].Style.Numberformat.Format = GetDateFormatForExport();
                             worksheet.Cells[i + 2, 2].Value = (double)row["E.ON [kW]"];
                             worksheet.Cells[i + 2, 3].Value = (double)row["Solar [kW]"];
                         }
@@ -404,6 +498,28 @@ namespace excelconverter
             }
         }
 
+        private string GetDateFormatForExport()
+        {
+            var outputInterval = ((ComboBoxItem)cboOutputInterval.SelectedItem).Content.ToString();
+
+            switch (outputInterval)
+            {
+                case "15 Minutes":
+                case "1 Hour":
+                    return "yyyy-MM-dd HH:mm";
+                case "1 Day":
+                    return "yyyy-MM-dd";
+                case "1 Week":
+                    return "yyyy-MM-dd 'Week'";
+                case "1 Month":
+                    return "yyyy-MM";
+                case "Quarter Year":
+                    return "yyyy 'Q'Q";
+                default:
+                    return "yyyy-MM-dd HH:mm";
+            }
+        }
+
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
             Close();
@@ -411,13 +527,6 @@ namespace excelconverter
     }
 
     public class DataPoint
-    {
-        public DateTime Timestamp { get; set; }
-        public double EonValue { get; set; }
-        public double SolarValue { get; set; }
-    }
-
-    public class HourlyDataPoint
     {
         public DateTime Timestamp { get; set; }
         public double EonValue { get; set; }

@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:excelconverter"
         mc:Ignorable="d"
-        Title="MainWindow" Height="650" Width="900">
+        Title="Time Interval Converter" Height="700" Width="900">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -40,23 +40,44 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <Label Grid.Row="0" Grid.Column="0" Content="Input Sheet (15-min):" VerticalAlignment="Center"/>
-                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="cboInputSheet" Margin="5" Padding="5"/>
+                <Label Grid.Row="0" Grid.Column="0" Content="Input Sheet:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="cboInputSheet" Margin="5" Padding="5" SelectionChanged="InputSheet_SelectionChanged"/>
 
-                <Label Grid.Row="0" Grid.Column="2" Content="Output Sheet (Hourly):" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <Label Grid.Row="0" Grid.Column="2" Content="Output Sheet:" VerticalAlignment="Center" Margin="10,0,0,0"/>
                 <ComboBox Grid.Row="0" Grid.Column="3" x:Name="cboOutputSheet" Margin="5" Padding="5"/>
 
-                <Label Grid.Row="1" Grid.Column="0" Content="Date Format:" VerticalAlignment="Center"/>
-                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="cboDateFormat" Margin="5" Padding="5">
+                <Label Grid.Row="1" Grid.Column="0" Content="Input Time Interval:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="cboInputInterval" Margin="5" Padding="5">
+                    <ComboBoxItem Content="15 Minutes" IsSelected="True"/>
+                    <ComboBoxItem Content="1 Hour"/>
+                    <ComboBoxItem Content="1 Day"/>
+                    <ComboBoxItem Content="1 Week"/>
+                    <ComboBoxItem Content="1 Month"/>
+                    <ComboBoxItem Content="Quarter Year"/>
+                </ComboBox>
+
+                <Label Grid.Row="1" Grid.Column="2" Content="Output Time Interval:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <ComboBox Grid.Row="1" Grid.Column="3" x:Name="cboOutputInterval" Margin="5" Padding="5">
+                    <ComboBoxItem Content="15 Minutes"/>
+                    <ComboBoxItem Content="1 Hour" IsSelected="True"/>
+                    <ComboBoxItem Content="1 Day"/>
+                    <ComboBoxItem Content="1 Week"/>
+                    <ComboBoxItem Content="1 Month"/>
+                    <ComboBoxItem Content="Quarter Year"/>
+                </ComboBox>
+
+                <Label Grid.Row="2" Grid.Column="0" Content="Date Format:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="cboDateFormat" Margin="5" Padding="5">
                     <ComboBoxItem Content="MM/dd/yy HH:mm" IsSelected="True"/>
                     <ComboBoxItem Content="dd/MM/yyyy HH:mm"/>
                     <ComboBoxItem Content="yyyy-MM-dd HH:mm"/>
                 </ComboBox>
 
-                <Label Grid.Row="1" Grid.Column="2" Content="Aggregation Method:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                <ComboBox Grid.Row="1" Grid.Column="3" x:Name="cboAggregation" Margin="5" Padding="5">
+                <Label Grid.Row="2" Grid.Column="2" Content="Aggregation Method:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <ComboBox Grid.Row="2" Grid.Column="3" x:Name="cboAggregation" Margin="5" Padding="5">
                     <ComboBoxItem Content="Average" IsSelected="True"/>
                     <ComboBoxItem Content="Sum"/>
                     <ComboBoxItem Content="Max"/>
@@ -92,7 +113,7 @@
         </GroupBox>
 
         <!-- Conversion Button -->
-        <Button Grid.Row="3" Content="Convert to Hourly Data" Padding="10,5" Margin="0,0,0,10" Click="ConvertButton_Click" HorizontalAlignment="Center"/>
+        <Button Grid.Row="3" Content="Convert Data" Padding="10,5" Margin="0,0,0,10" Click="ConvertButton_Click" HorizontalAlignment="Center"/>
 
         <!-- Data Preview -->
         <GroupBox Grid.Row="4" Header="Data Preview" Padding="5">
