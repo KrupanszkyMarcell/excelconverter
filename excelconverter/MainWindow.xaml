@@ -81,8 +81,8 @@
 
                 <Label Grid.Row="2" Grid.Column="2" Content="Aggregation Method:" VerticalAlignment="Center" Margin="10,0,0,0"/>
                 <ComboBox Grid.Row="2" Grid.Column="3" x:Name="cboAggregation" Margin="5" Padding="5">
-                    <ComboBoxItem Content="Average" IsSelected="True"/>
-                    <ComboBoxItem Content="Sum"/>
+                    <ComboBoxItem Content="Average"/>
+                    <ComboBoxItem Content="Sum" IsSelected="True"/>
                     <ComboBoxItem Content="Max"/>
                     <ComboBoxItem Content="Min"/>
                 </ComboBox>
