@@ -23,10 +23,24 @@ using System.Threading;
 
 namespace excelconverter
 {
+    // Define the DynamicDataPoint class at the top of the file, immediately after the namespace declaration
+    public class DynamicDataPoint
+    {
+        public DateTime Timestamp { get; set; }
+        public Dictionary<string, double> Values { get; set; }
+
+        public DynamicDataPoint()
+        {
+            Values = new Dictionary<string, double>();
+        }
+    }
+
     public partial class MainWindow : Window
     {
         private DataTable resultsTable = new DataTable();
         private string filePath;
+        private List<string> selectedDataColumns = new List<string>(); // Store selected data column names
+        private Dictionary<string, ComboBox> dataColumnControls = new Dictionary<string, ComboBox>(); // For tracking UI elements
 
         public MainWindow()
         {
@@ -59,8 +73,10 @@ namespace excelconverter
                 cboInputSheet.Items.Clear();
                 cboOutputSheet.Items.Clear();
                 cboDateColumn.Items.Clear();
-                cboEonColumn.Items.Clear();
-                cboSolarColumn.Items.Clear();
+                cboAddDataColumn.Items.Clear();
+
+                // Clear existing data column selections
+                ClearDataColumns();
 
                 using (var package = new ExcelPackage(new FileInfo(filePath)))
                 {
@@ -97,8 +113,10 @@ namespace excelconverter
             try
             {
                 cboDateColumn.Items.Clear();
-                cboEonColumn.Items.Clear();
-                cboSolarColumn.Items.Clear();
+                cboAddDataColumn.Items.Clear();
+
+                // Clear existing data column selections
+                ClearDataColumns();
 
                 using (var package = new ExcelPackage(new FileInfo(filePath)))
                 {
@@ -117,8 +135,7 @@ namespace excelconverter
                         }
 
                         cboDateColumn.Items.Add(colName);
-                        cboEonColumn.Items.Add(colName);
-                        cboSolarColumn.Items.Add(colName);
+                        cboAddDataColumn.Items.Add(colName);
                     }
 
                     // Try to auto-select appropriate columns
@@ -127,14 +144,6 @@ namespace excelconverter
                         // Try to find date/time column
                         var dateIndex = FindColumnIndexByPattern(cboDateColumn.Items, new[] { "date", "time", "timestamp", "időpont" });
                         cboDateColumn.SelectedIndex = dateIndex >= 0 ? dateIndex : 0;
-
-                        // Try to find E.ON column
-                        var eonIndex = FindColumnIndexByPattern(cboEonColumn.Items, new[] { "e.on", "eon", "érték" });
-                        cboEonColumn.SelectedIndex = eonIndex >= 0 ? eonIndex : Math.Min(1, cboEonColumn.Items.Count - 1);
-
-                        // Try to find Solar column
-                        var solarIndex = FindColumnIndexByPattern(cboSolarColumn.Items, new[] { "solar", "sun", "nap" });
-                        cboSolarColumn.SelectedIndex = solarIndex >= 0 ? solarIndex : Math.Min(2, cboSolarColumn.Items.Count - 1);
 
                         // Auto-detect date format based on the selected date column
                         if (cboDateColumn.SelectedIndex >= 0)
@@ -148,6 +157,131 @@ namespace excelconverter
             {
                 MessageBox.Show($"Error loading column names: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void ClearDataColumns()
+        {
+            // Clear list of selected columns
+            selectedDataColumns.Clear();
+
+            // Clear dictionary of UI controls
+            dataColumnControls.Clear();
+
+            // Clear UI panel
+            pnlDataColumns.Children.Clear();
+        }
+
+        private void AddDataColumn_Click(object sender, RoutedEventArgs e)
+        {
+            if (cboAddDataColumn.SelectedItem == null)
+            {
+                MessageBox.Show("Please select a column to add.", "Selection Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string selectedColumn = cboAddDataColumn.SelectedItem.ToString();
+
+            // Check if this column is already selected
+            if (selectedDataColumns.Contains(selectedColumn))
+            {
+                MessageBox.Show("This column is already added.", "Duplicate Column", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Check if this is the date column
+            if (cboDateColumn.SelectedItem != null && selectedColumn == cboDateColumn.SelectedItem.ToString())
+            {
+                MessageBox.Show("This column is already selected as the Date Column.", "Duplicate Column", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Add to the list of selected columns
+            selectedDataColumns.Add(selectedColumn);
+
+            // Create UI for this column
+            StackPanel panel = new StackPanel();
+            panel.Orientation = Orientation.Horizontal;
+            panel.Margin = new Thickness(0, 5, 0, 5);
+
+            // Create remove button
+            Button removeButton = new Button();
+            removeButton.Content = "Remove";
+            removeButton.Padding = new Thickness(5, 2, 5, 2);
+            removeButton.Margin = new Thickness(0, 0, 10, 0);
+            removeButton.Tag = selectedColumn;
+            removeButton.Click += RemoveDataColumn_Click;
+
+            // Create column label
+            Label columnLabel = new Label();
+            columnLabel.Content = selectedColumn;
+            columnLabel.Width = 200;
+            columnLabel.VerticalAlignment = VerticalAlignment.Center;
+
+            // Add controls to panel
+            panel.Children.Add(removeButton);
+            panel.Children.Add(columnLabel);
+
+            // Add panel to the main UI container
+            pnlDataColumns.Children.Add(panel);
+
+            // Optionally, remove the column from the dropdown to prevent reselection
+            cboAddDataColumn.Items.Remove(selectedColumn);
+            if (cboAddDataColumn.Items.Count > 0)
+            {
+                cboAddDataColumn.SelectedIndex = 0;
+            }
+        }
+
+        private void RemoveDataColumn_Click(object sender, RoutedEventArgs e)
+        {
+            Button button = sender as Button;
+            if (button != null)
+            {
+                string columnName = button.Tag.ToString();
+
+                // Remove from the list
+                selectedDataColumns.Remove(columnName);
+
+                // Find and remove the UI row
+                for (int i = 0; i < pnlDataColumns.Children.Count; i++)
+                {
+                    StackPanel panel = pnlDataColumns.Children[i] as StackPanel;
+                    if (panel != null)
+                    {
+                        Button removeBtn = panel.Children[0] as Button;
+                        if (removeBtn != null && removeBtn.Tag.ToString() == columnName)
+                        {
+                            pnlDataColumns.Children.RemoveAt(i);
+                            break;
+                        }
+                    }
+                }
+
+                // Add back to the dropdown
+                if (!cboAddDataColumn.Items.Contains(columnName))
+                {
+                    cboAddDataColumn.Items.Add(columnName);
+                }
+            }
+        }
+
+        private void FinishAddingColumns_Click(object sender, RoutedEventArgs e)
+        {
+            // Optional: Validate that at least one data column has been selected
+            if (selectedDataColumns.Count == 0)
+            {
+                MessageBox.Show("Please add at least one data column before finishing.",
+                    "Data Column Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Visually indicate that column selection is complete
+            btnAddDataColumn.IsEnabled = false;
+            cboAddDataColumn.IsEnabled = false;
+            btnFinishAdding.IsEnabled = false;
+
+            MessageBox.Show("Data column selection completed. Click 'Convert Data' when ready to proceed.",
+                "Selection Complete", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private int FindColumnIndexByPattern(System.Collections.IList items, string[] patterns)
@@ -181,10 +315,10 @@ namespace excelconverter
         private void ConvertButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrEmpty(filePath) || cboInputSheet.SelectedItem == null ||
-                cboDateColumn.SelectedItem == null || cboEonColumn.SelectedItem == null ||
-                cboSolarColumn.SelectedItem == null)
+                cboDateColumn.SelectedItem == null || selectedDataColumns.Count == 0)
             {
-                MessageBox.Show("Please select all required fields.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Please select all required fields and at least one data column.",
+                    "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -239,21 +373,48 @@ namespace excelconverter
             return outputIndex >= inputIndex;
         }
 
-        private List<DataPoint> ReadExcelData(ExcelWorksheet worksheet)
+        private List<DynamicDataPoint> ReadExcelData(ExcelWorksheet worksheet)
         {
-            var data = new List<DataPoint>();
+            var data = new List<DynamicDataPoint>();
 
             // Get column indices
             int dateColumnIndex = cboDateColumn.SelectedIndex + 1;
-            int eonColumnIndex = cboEonColumn.SelectedIndex + 1;
-            int solarColumnIndex = cboSolarColumn.SelectedIndex + 1;
+
+            // Create a dictionary to map column names to column indices
+            Dictionary<string, int> dataColumnIndices = new Dictionary<string, int>();
+
+            // Find the column indices for all selected data columns
+            foreach (string columnName in selectedDataColumns)
+            {
+                // Find the column index by name
+                int columnIndex = -1;
+                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+                {
+                    var colName = worksheet.Cells[1, col].Text;
+                    if (string.IsNullOrWhiteSpace(colName))
+                    {
+                        colName = GetExcelColumnName(col);
+                    }
+
+                    if (colName == columnName)
+                    {
+                        columnIndex = col;
+                        break;
+                    }
+                }
+
+                if (columnIndex > 0)
+                {
+                    dataColumnIndices.Add(columnName, columnIndex);
+                }
+            }
 
             // Read data rows (start from row 2, assuming row 1 has headers)
             int rowCount = worksheet.Dimension.End.Row;
 
             // Debug info - log first few rows for diagnostics
             Console.WriteLine($"Reading data from {rowCount} rows");
-            Console.WriteLine($"Date column: {dateColumnIndex}, E.ON column: {eonColumnIndex}, Solar column: {solarColumnIndex}");
+            Console.WriteLine($"Date column: {dateColumnIndex}, Data columns: {string.Join(", ", dataColumnIndices.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
 
             // Create a comprehensive list of date formats to try
             string[] commonFormats = new[]
@@ -283,26 +444,15 @@ namespace excelconverter
             for (int row = 2; row <= rowCount; row++)
             {
                 var dateCell = worksheet.Cells[row, dateColumnIndex];
-                var eonCell = worksheet.Cells[row, eonColumnIndex];
-                var solarCell = worksheet.Cells[row, solarColumnIndex];
 
                 // First check if the date cell contains a real Excel date
+                DateTime timestamp;
+                bool dateValid = false;
+
                 if (dateCell.Value is DateTime)
                 {
-                    DateTime date = (DateTime)dateCell.Value;
-
-                    // Parse E.ON and Solar values with robust handling
-                    double eonValue = ParseNumericValue(eonCell);
-                    double solarValue = ParseNumericValue(solarCell);
-
-                    data.Add(new DataPoint
-                    {
-                        Timestamp = date,
-                        EonValue = eonValue,
-                        SolarValue = solarValue
-                    });
-
-                    successfullyParsed++;
+                    timestamp = (DateTime)dateCell.Value;
+                    dateValid = true;
                 }
                 else
                 {
@@ -313,14 +463,12 @@ namespace excelconverter
                     {
                         // First try with the user-selected format
                         var selectedDateFormat = cboDateFormat.Text;
-                        DateTime date;
-                        bool parsed = false;
 
                         // Try the selected format first
                         if (DateTime.TryParseExact(dateStr, selectedDateFormat,
-                            CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+                            CultureInfo.InvariantCulture, DateTimeStyles.None, out timestamp))
                         {
-                            parsed = true;
+                            dateValid = true;
                         }
                         else
                         {
@@ -328,44 +476,54 @@ namespace excelconverter
                             foreach (var format in commonFormats)
                             {
                                 if (DateTime.TryParseExact(dateStr, format,
-                                    CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+                                    CultureInfo.InvariantCulture, DateTimeStyles.None, out timestamp))
                                 {
-                                    parsed = true;
+                                    dateValid = true;
                                     break;
                                 }
                             }
 
                             // If all specific formats fail, try general parsing as last resort
-                            if (!parsed && DateTime.TryParse(dateStr, out date))
+                            if (!dateValid && DateTime.TryParse(dateStr, out timestamp))
                             {
-                                parsed = true;
+                                dateValid = true;
                             }
                         }
+                    }
+                    else
+                    {
+                        timestamp = DateTime.MinValue; // Default value
+                    }
+                }
 
-                        if (parsed)
-                        {
-                            // Successfully parsed date
-                            double eonValue = ParseNumericValue(eonCell);
-                            double solarValue = ParseNumericValue(solarCell);
+                if (dateValid)
+                {
+                    // Create a new dynamic data point with the timestamp
+                    var dataPoint = new DynamicDataPoint { Timestamp = timestamp };
 
-                            data.Add(new DataPoint
-                            {
-                                Timestamp = date,
-                                EonValue = eonValue,
-                                SolarValue = solarValue
-                            });
+                    // Read all the data values for this row
+                    foreach (var columnPair in dataColumnIndices)
+                    {
+                        string columnName = columnPair.Key;
+                        int columnIndex = columnPair.Value;
 
-                            successfullyParsed++;
-                        }
-                        else
-                        {
-                            failedToParse++;
-                            // Log the problematic date string for diagnostics
-                            if (failedToParse < 10)  // Limit logging to avoid console overflow
-                            {
-                                Console.WriteLine($"Failed to parse date at row {row}: '{dateStr}'");
-                            }
-                        }
+                        var dataCell = worksheet.Cells[row, columnIndex];
+                        double value = ParseNumericValue(dataCell);
+
+                        // Add this value to the data point
+                        dataPoint.Values[columnName] = value;
+                    }
+
+                    data.Add(dataPoint);
+                    successfullyParsed++;
+                }
+                else
+                {
+                    failedToParse++;
+                    // Log the problematic date string for diagnostics
+                    if (failedToParse < 10)  // Limit logging to avoid console overflow
+                    {
+                        Console.WriteLine($"Failed to parse date at row {row}: '{dateCell.Text}'");
                     }
                 }
             }
@@ -378,7 +536,8 @@ namespace excelconverter
                 Console.WriteLine("First 5 parsed data points:");
                 for (int i = 0; i < Math.Min(5, data.Count); i++)
                 {
-                    Console.WriteLine($"{data[i].Timestamp:yyyy-MM-dd HH:mm:ss} - E.ON: {data[i].EonValue}, Solar: {data[i].SolarValue}");
+                    Console.WriteLine($"{data[i].Timestamp:yyyy-MM-dd HH:mm:ss} - " +
+                        string.Join(", ", data[i].Values.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
                 }
             }
 
@@ -424,74 +583,7 @@ namespace excelconverter
             return result;
         }
 
-        private List<DataPoint> ConvertData(List<DataPoint> data, string inputInterval, string outputInterval)
-        {
-            var convertedData = new List<DataPoint>();
-            var aggregationMethod = ((ComboBoxItem)cboAggregation.SelectedItem).Content.ToString();
-
-            // Check if we have any data to convert
-            if (data.Count == 0)
-            {
-                MessageBox.Show("No data found or could not parse dates. Please check your date format selection.",
-                    "No Data", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return convertedData;
-            }
-
-            try
-            {
-                // Group the data by the appropriate time interval
-                var groupedData = GroupDataByInterval(data, outputInterval);
-                int groupCount = 0;
-
-                foreach (var group in groupedData)
-                {
-                    groupCount++;
-
-                    // Skip empty groups
-                    if (!group.Any())
-                        continue;
-
-                    var newPoint = new DataPoint
-                    {
-                        // Use the group key as timestamp - this is crucial for the forward-rounding
-                        Timestamp = group.Key
-                    };
-
-                    // Apply aggregation method
-                    switch (aggregationMethod)
-                    {
-                        case "Average":
-                            newPoint.EonValue = group.Average(d => d.EonValue);
-                            newPoint.SolarValue = group.Average(d => d.SolarValue);
-                            break;
-                        case "Sum":
-                            newPoint.EonValue = group.Sum(d => d.EonValue);
-                            newPoint.SolarValue = group.Sum(d => d.SolarValue);
-                            break;
-                        case "Max":
-                            newPoint.EonValue = group.Max(d => d.EonValue);
-                            newPoint.SolarValue = group.Max(d => d.SolarValue);
-                            break;
-                        case "Min":
-                            newPoint.EonValue = group.Min(d => d.EonValue);
-                            newPoint.SolarValue = group.Min(d => d.SolarValue);
-                            break;
-                    }
-
-                    convertedData.Add(newPoint);
-                }
-
-                // Sort by timestamp and return
-                return convertedData.OrderBy(d => d.Timestamp).ToList();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error during data conversion: {ex.Message}\n\nStack trace: {ex.StackTrace}",
-                    "Conversion Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return new List<DataPoint>();
-            }
-        }
-        private IEnumerable<IGrouping<DateTime, DataPoint>> GroupDataByInterval(List<DataPoint> data, string interval)
+        private IEnumerable<IGrouping<DateTime, DynamicDataPoint>> GroupDataByInterval(List<DynamicDataPoint> data, string interval)
         {
             // First sort the data by timestamp to ensure proper grouping
             var sortedData = data.OrderBy(d => d.Timestamp).ToList();
@@ -622,22 +714,136 @@ namespace excelconverter
                     });
             }
         }
-        private void DisplayResults(List<DataPoint> convertedData)
+
+        private List<DynamicDataPoint> ConvertData(List<DynamicDataPoint> data, string inputInterval, string outputInterval)
+        {
+            var convertedData = new List<DynamicDataPoint>();
+            var aggregationMethod = ((ComboBoxItem)cboAggregation.SelectedItem).Content.ToString();
+
+            // Check if we have any data to convert
+            if (data.Count == 0)
+            {
+                MessageBox.Show("No data found or could not parse dates. Please check your date format selection.",
+                    "No Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return convertedData;
+            }
+
+            try
+            {
+                // Group the data by the appropriate time interval
+                var groupedData = GroupDataByInterval(data, outputInterval);
+                int groupCount = 0;
+
+                foreach (var group in groupedData)
+                {
+                    groupCount++;
+
+                    // Skip empty groups
+                    if (!group.Any())
+                        continue;
+
+                    // Create a new data point for this group with the timestamp from the group key
+                    var newPoint = new DynamicDataPoint { Timestamp = group.Key };
+
+                    // Get all unique column names from all data points in this group
+                    var allColumnNames = new HashSet<string>();
+                    foreach (var dataPoint in group)
+                    {
+                        foreach (var columnName in dataPoint.Values.Keys)
+                        {
+                            allColumnNames.Add(columnName);
+                        }
+                    }
+
+                    // Apply the selected aggregation method for each column
+                    foreach (var columnName in allColumnNames)
+                    {
+                        // Get all values for this column in the current group
+                        var columnValues = group
+                            .Where(dp => dp.Values.ContainsKey(columnName))
+                            .Select(dp => dp.Values[columnName])
+                            .ToList();
+
+                        if (columnValues.Count > 0)
+                        {
+                            // Apply the selected aggregation method
+                            switch (aggregationMethod)
+                            {
+                                case "Average":
+                                    newPoint.Values[columnName] = columnValues.Average();
+                                    break;
+                                case "Sum":
+                                    newPoint.Values[columnName] = columnValues.Sum();
+                                    break;
+                                case "Max":
+                                    newPoint.Values[columnName] = columnValues.Max();
+                                    break;
+                                case "Min":
+                                    newPoint.Values[columnName] = columnValues.Min();
+                                    break;
+                            }
+                        }
+                    }
+
+                    convertedData.Add(newPoint);
+                }
+
+                // Sort by timestamp and return
+                return convertedData.OrderBy(d => d.Timestamp).ToList();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during data conversion: {ex.Message}\n\nStack trace: {ex.StackTrace}",
+                     "Conversion Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return new List<DynamicDataPoint>();
+            }
+        }
+
+        private void DisplayResults(List<DynamicDataPoint> convertedData)
         {
             // Create a DataTable to hold the results
             resultsTable = new DataTable();
             resultsTable.Columns.Add("Timestamp", typeof(DateTime));
-            resultsTable.Columns.Add("E.ON [kW]", typeof(double));
-            resultsTable.Columns.Add("Solar [kW]", typeof(double));
 
-            // Add rows to the table
-            foreach (var point in convertedData)
+            // Add a column for each data value
+            if (convertedData.Count > 0)
             {
-                resultsTable.Rows.Add(
-                    point.Timestamp,
-                    Math.Round(point.EonValue, 2),
-                    Math.Round(point.SolarValue, 2)
-                );
+                // Get all unique column names from all data points
+                var columnNames = new HashSet<string>();
+                foreach (var dataPoint in convertedData)
+                {
+                    foreach (var columnName in dataPoint.Values.Keys)
+                    {
+                        if (!columnNames.Contains(columnName))
+                        {
+                            columnNames.Add(columnName);
+                            resultsTable.Columns.Add($"{columnName} [kW]", typeof(double));
+                        }
+                    }
+                }
+
+                // Add rows to the table
+                foreach (var point in convertedData)
+                {
+                    DataRow row = resultsTable.NewRow();
+                    row["Timestamp"] = point.Timestamp;
+
+                    // Add each value from this data point
+                    foreach (var columnName in columnNames)
+                    {
+                        if (point.Values.ContainsKey(columnName))
+                        {
+                            row[$"{columnName} [kW]"] = Math.Round(point.Values[columnName], 2);
+                        }
+                        else
+                        {
+                            // If this point doesn't have a value for this column, set to 0 or null
+                            row[$"{columnName} [kW]"] = DBNull.Value;
+                        }
+                    }
+
+                    resultsTable.Rows.Add(row);
+                }
             }
 
             // Bind the table to the DataGrid
@@ -670,19 +876,33 @@ namespace excelconverter
                         var worksheetName = cboOutputSheet.SelectedItem?.ToString() ?? "Converted Data";
                         var worksheet = package.Workbook.Worksheets.Add(worksheetName);
 
-                        // Add headers
+                        // Add headers - first column is always timestamp
                         worksheet.Cells[1, 1].Value = "Timestamp";
-                        worksheet.Cells[1, 2].Value = "E.ON [kW]";
-                        worksheet.Cells[1, 3].Value = "Solar [kW]";
+
+                        // Add all other column headers
+                        for (int col = 1; col < resultsTable.Columns.Count; col++)
+                        {
+                            worksheet.Cells[1, col + 1].Value = resultsTable.Columns[col].ColumnName;
+                        }
 
                         // Add data
                         for (int i = 0; i < resultsTable.Rows.Count; i++)
                         {
                             var row = resultsTable.Rows[i];
+
+                            // Add timestamp
                             worksheet.Cells[i + 2, 1].Value = (DateTime)row["Timestamp"];
                             worksheet.Cells[i + 2, 1].Style.Numberformat.Format = GetDateFormatForExport();
-                            worksheet.Cells[i + 2, 2].Value = (double)row["E.ON [kW]"];
-                            worksheet.Cells[i + 2, 3].Value = (double)row["Solar [kW]"];
+
+                            // Add all other columns
+                            for (int col = 1; col < resultsTable.Columns.Count; col++)
+                            {
+                                var colName = resultsTable.Columns[col].ColumnName;
+                                if (row[colName] != DBNull.Value)
+                                {
+                                    worksheet.Cells[i + 2, col + 1].Value = (double)row[colName];
+                                }
+                            }
                         }
 
                         // Auto-fit columns
@@ -813,14 +1033,5 @@ namespace excelconverter
         {
             Close();
         }
-
-
-    }
-
-    public class DataPoint
-    {
-        public DateTime Timestamp { get; set; }
-        public double EonValue { get; set; }
-        public double SolarValue { get; set; }
     }
 }

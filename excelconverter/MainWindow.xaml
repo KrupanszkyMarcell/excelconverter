@@ -1,4 +1,5 @@
-﻿<Window x:Class="excelconverter.MainWindow"
+﻿<!-- MainWindow.xaml -->
+<Window x:Class="excelconverter.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -91,26 +92,41 @@
         <!-- Column Mapping Section -->
         <GroupBox Grid.Row="2" Header="Column Mapping" Padding="5" Margin="0,0,0,10">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <Label Grid.Row="0" Grid.Column="0" Content="Date Column:" VerticalAlignment="Center"/>
-                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="cboDateColumn" Margin="5" Padding="5"/>
+                <!-- Date Column Selection -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5">
+                    <Label Content="Date Column:" VerticalAlignment="Center" Width="100"/>
+                    <ComboBox x:Name="cboDateColumn" Width="200" Padding="5"/>
+                </StackPanel>
 
-                <Label Grid.Row="1" Grid.Column="0" Content="E.ON Column:" VerticalAlignment="Center"/>
-                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="cboEonColumn" Margin="5" Padding="5"/>
+                <!-- Data Columns Section -->
+                <GroupBox Grid.Row="1" Header="Data Columns" Padding="5" Margin="0,10,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                <Label Grid.Row="2" Grid.Column="0" Content="Solar Column:" VerticalAlignment="Center"/>
-                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="cboSolarColumn" Margin="5" Padding="5"/>
+                        <!-- Add Data Column Section -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,5,0,10">
+                            <Label Content="Add Data Column:" VerticalAlignment="Center" Width="120"/>
+                            <ComboBox x:Name="cboAddDataColumn" Width="200" Padding="5" Margin="0,0,10,0"/>
+                            <Button x:Name="btnAddDataColumn" Content="Add" Padding="10,5" Click="AddDataColumn_Click"/>
+                            <Button x:Name="btnFinishAdding" Content="Nem szeretnék többet" Padding="10,5" Margin="10,0,0,0" Click="FinishAddingColumns_Click"/>
+                        </StackPanel>
+
+                        <!-- Selected Data Columns -->
+                        <ScrollViewer Grid.Row="1" MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="pnlDataColumns">
+                                <!-- Data columns will be added here dynamically -->
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </GroupBox>
             </Grid>
         </GroupBox>
 
@@ -118,9 +134,7 @@
         <Button Grid.Row="3" Content="Convert Data" Padding="10,5" Margin="0,0,0,10" Click="ConvertButton_Click" HorizontalAlignment="Center"/>
 
         <!-- Data Preview -->
-        <GroupBox Grid.Row="4" Header="Data Preview" Padding="5">
-            <DataGrid x:Name="dgResults" AutoGenerateColumns="True" IsReadOnly="True" AlternatingRowBackground="LightGray"/>
-        </GroupBox>
+
 
         <!-- Save Button -->
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
