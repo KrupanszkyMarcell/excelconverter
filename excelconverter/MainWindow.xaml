@@ -134,7 +134,9 @@
         <Button Grid.Row="3" Content="Convert Data" Padding="10,5" Margin="0,0,0,10" Click="ConvertButton_Click" HorizontalAlignment="Center"/>
 
         <!-- Data Preview -->
-
+        <GroupBox Grid.Row="4" Header="Data Preview" Padding="5">
+            <DataGrid x:Name="dgResults" AutoGenerateColumns="True" IsReadOnly="True" AlternatingRowBackground="LightGray"/>
+        </GroupBox>
 
         <!-- Save Button -->
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
