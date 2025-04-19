@@ -1,0 +1,108 @@
+﻿<Window x:Class="excelconverter.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:excelconverter"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="650" Width="900">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- File Selection Section -->
+        <GroupBox Grid.Row="0" Header="Excel File" Padding="5" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="txtFilePath" IsReadOnly="True" Padding="5" Margin="0,0,5,0"/>
+                <Button Grid.Column="1" Content="Browse..." Padding="10,5" Click="BrowseButton_Click"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Sheet Selection Section -->
+        <GroupBox Grid.Row="1" Header="Sheet Selection" Padding="5" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Label Grid.Row="0" Grid.Column="0" Content="Input Sheet (15-min):" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="cboInputSheet" Margin="5" Padding="5"/>
+
+                <Label Grid.Row="0" Grid.Column="2" Content="Output Sheet (Hourly):" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <ComboBox Grid.Row="0" Grid.Column="3" x:Name="cboOutputSheet" Margin="5" Padding="5"/>
+
+                <Label Grid.Row="1" Grid.Column="0" Content="Date Format:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="cboDateFormat" Margin="5" Padding="5">
+                    <ComboBoxItem Content="MM/dd/yy HH:mm" IsSelected="True"/>
+                    <ComboBoxItem Content="dd/MM/yyyy HH:mm"/>
+                    <ComboBoxItem Content="yyyy-MM-dd HH:mm"/>
+                </ComboBox>
+
+                <Label Grid.Row="1" Grid.Column="2" Content="Aggregation Method:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <ComboBox Grid.Row="1" Grid.Column="3" x:Name="cboAggregation" Margin="5" Padding="5">
+                    <ComboBoxItem Content="Average" IsSelected="True"/>
+                    <ComboBoxItem Content="Sum"/>
+                    <ComboBoxItem Content="Max"/>
+                    <ComboBoxItem Content="Min"/>
+                </ComboBox>
+            </Grid>
+        </GroupBox>
+
+        <!-- Column Mapping Section -->
+        <GroupBox Grid.Row="2" Header="Column Mapping" Padding="5" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Label Grid.Row="0" Grid.Column="0" Content="Date Column:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="cboDateColumn" Margin="5" Padding="5"/>
+
+                <Label Grid.Row="1" Grid.Column="0" Content="E.ON Column:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="cboEonColumn" Margin="5" Padding="5"/>
+
+                <Label Grid.Row="2" Grid.Column="0" Content="Solar Column:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="cboSolarColumn" Margin="5" Padding="5"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Conversion Button -->
+        <Button Grid.Row="3" Content="Convert to Hourly Data" Padding="10,5" Margin="0,0,0,10" Click="ConvertButton_Click" HorizontalAlignment="Center"/>
+
+        <!-- Data Preview -->
+        <GroupBox Grid.Row="4" Header="Data Preview" Padding="5">
+            <DataGrid x:Name="dgResults" AutoGenerateColumns="True" IsReadOnly="True" AlternatingRowBackground="LightGray"/>
+        </GroupBox>
+
+        <!-- Save Button -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Export to Excel" Padding="10,5" Margin="0,0,5,0" Click="ExportButton_Click"/>
+            <Button Content="Exit" Padding="10,5" Click="ExitButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
