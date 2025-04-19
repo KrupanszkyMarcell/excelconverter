@@ -33,7 +33,7 @@ namespace excelconverter
             InitializeComponent();
 
             // Set EPPlus license context
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            ExcelPackage.License.SetNonCommercialOrganization("My Noncommercial organization");
         }
 
         private void BrowseButton_Click(object sender, RoutedEventArgs e)
