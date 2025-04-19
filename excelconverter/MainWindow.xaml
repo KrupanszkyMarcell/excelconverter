@@ -71,9 +71,11 @@
 
                 <Label Grid.Row="2" Grid.Column="0" Content="Date Format:" VerticalAlignment="Center"/>
                 <ComboBox Grid.Row="2" Grid.Column="1" x:Name="cboDateFormat" Margin="5" Padding="5">
-                    <ComboBoxItem Content="MM/dd/yy HH:mm" IsSelected="True"/>
+                    <ComboBoxItem Content="MM/dd/yy HH:mm"/>
                     <ComboBoxItem Content="dd/MM/yyyy HH:mm"/>
                     <ComboBoxItem Content="yyyy-MM-dd HH:mm"/>
+                    <ComboBoxItem Content="MM/dd/yyyy HH:mm:ss" IsSelected="True"/>
+                    <ComboBoxItem Content="dd/MM/yyyy HH:mm:ss"/>
                 </ComboBox>
 
                 <Label Grid.Row="2" Grid.Column="2" Content="Aggregation Method:" VerticalAlignment="Center" Margin="10,0,0,0"/>

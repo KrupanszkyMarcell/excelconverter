@@ -135,6 +135,12 @@ namespace excelconverter
                         // Try to find Solar column
                         var solarIndex = FindColumnIndexByPattern(cboSolarColumn.Items, new[] { "solar", "sun", "nap" });
                         cboSolarColumn.SelectedIndex = solarIndex >= 0 ? solarIndex : Math.Min(2, cboSolarColumn.Items.Count - 1);
+
+                        // Auto-detect date format based on the selected date column
+                        if (cboDateColumn.SelectedIndex >= 0)
+                        {
+                            DetectAndSetDateFormat(worksheet, cboDateColumn.SelectedIndex + 1);
+                        }
                     }
                 }
             }
@@ -254,34 +260,57 @@ namespace excelconverter
                 {
                     try
                     {
-                        // Parse date string based on selected format
-                        var dateFormatStr = cboDateFormat.Text;
+                        // Get the selected date format
+                        var selectedDateFormat = cboDateFormat.Text;
                         DateTime date;
+                        bool parsed = false;
 
-                        // Try to parse the date with the selected format
-                        if (!DateTime.TryParseExact(dateStr, dateFormatStr, CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+                        // First try with the user-selected format
+                        if (DateTime.TryParseExact(dateStr, selectedDateFormat,
+                            CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
                         {
-                            // If parsing fails, try a few common formats
+                            parsed = true;
+                        }
+                        else
+                        {
+                            // Define a larger set of formats to try
                             string[] commonFormats = new[]
                             {
-                                "MM/dd/yy HH:mm",
-                                "dd/MM/yyyy HH:mm",
-                                "yyyy-MM-dd HH:mm",
-                                "MM/dd/yyyy HH:mm",
-                                "MM/dd/yy H:mm",
-                                "MM/dd/yyyy H:mm:ss"
-                            };
+                        "MM/dd/yyyy HH:mm:ss", // Add this format for your second image
+                        "dd/MM/yyyy HH:mm:ss",
+                        "MM/dd/yy HH:mm",
+                        "dd/MM/yyyy HH:mm",
+                        "yyyy-MM-dd HH:mm",
+                        "MM/dd/yyyy HH:mm",
+                        "MM/dd/yy H:mm",
+                        "MM/dd/yyyy H:mm:ss",
+                        "M/d/yyyy HH:mm:ss",  // Add this format for flexibility
+                        "d/M/yyyy HH:mm:ss",
+                        "yyyy-MM-dd"
+                    };
 
                             // Try each format
-                            if (!DateTime.TryParseExact(dateStr, commonFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+                            foreach (var format in commonFormats)
                             {
-                                // Last resort: try general parsing
-                                if (!DateTime.TryParse(dateStr, out date))
+                                if (DateTime.TryParseExact(dateStr, format,
+                                    CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
                                 {
-                                    // Skip invalid dates
-                                    continue;
+                                    parsed = true;
+                                    break;
                                 }
                             }
+
+                            // If all formats fail, try general parsing as last resort
+                            if (!parsed && DateTime.TryParse(dateStr, out date))
+                            {
+                                parsed = true;
+                            }
+                        }
+
+                        if (!parsed)
+                        {
+                            // Skip this row if date couldn't be parsed
+                            continue;
                         }
 
                         // Parse E.ON and Solar values
@@ -309,7 +338,7 @@ namespace excelconverter
                     }
                     catch (Exception ex)
                     {
-                        // Skip invalid data
+                        // Log the error but continue processing other rows
                         Console.WriteLine($"Error parsing row {row}: {ex.Message}");
                     }
                 }
@@ -317,50 +346,78 @@ namespace excelconverter
 
             return data;
         }
-
         private List<DataPoint> ConvertData(List<DataPoint> data, string inputInterval, string outputInterval)
         {
             var convertedData = new List<DataPoint>();
             var aggregationMethod = ((ComboBoxItem)cboAggregation.SelectedItem).Content.ToString();
 
-            // Group the data by the appropriate time interval
-            var groupedData = GroupDataByInterval(data, outputInterval);
-
-            foreach (var group in groupedData)
+            // Check if we have any data to convert
+            if (data.Count == 0)
             {
-                var newPoint = new DataPoint
-                {
-                    Timestamp = group.Key
-                };
-
-                // Apply aggregation method
-                switch (aggregationMethod)
-                {
-                    case "Average":
-                        newPoint.EonValue = group.Average(d => d.EonValue);
-                        newPoint.SolarValue = group.Average(d => d.SolarValue);
-                        break;
-                    case "Sum":
-                        newPoint.EonValue = group.Sum(d => d.EonValue);
-                        newPoint.SolarValue = group.Sum(d => d.SolarValue);
-                        break;
-                    case "Max":
-                        newPoint.EonValue = group.Max(d => d.EonValue);
-                        newPoint.SolarValue = group.Max(d => d.SolarValue);
-                        break;
-                    case "Min":
-                        newPoint.EonValue = group.Min(d => d.EonValue);
-                        newPoint.SolarValue = group.Min(d => d.SolarValue);
-                        break;
-                }
-
-                convertedData.Add(newPoint);
+                MessageBox.Show("No data found or could not parse dates. Please check your date format selection.",
+                    "No Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return convertedData;
             }
 
-            // Sort by timestamp
-            return convertedData.OrderBy(d => d.Timestamp).ToList();
-        }
+            // Log some data for debugging
+            Console.WriteLine($"Converting {data.Count} data points");
+            if (data.Count > 0)
+            {
+                Console.WriteLine($"First data point: {data[0].Timestamp} - E.ON: {data[0].EonValue}, Solar: {data[0].SolarValue}");
+                if (data.Count > 1)
+                    Console.WriteLine($"Second data point: {data[1].Timestamp} - E.ON: {data[1].EonValue}, Solar: {data[1].SolarValue}");
+            }
 
+            try
+            {
+                // Group the data by the appropriate time interval
+                var groupedData = GroupDataByInterval(data, outputInterval);
+
+                foreach (var group in groupedData)
+                {
+                    var newPoint = new DataPoint
+                    {
+                        Timestamp = group.Key
+                    };
+
+                    // Skip empty groups
+                    if (!group.Any())
+                        continue;
+
+                    // Apply aggregation method
+                    switch (aggregationMethod)
+                    {
+                        case "Average":
+                            newPoint.EonValue = group.Average(d => d.EonValue);
+                            newPoint.SolarValue = group.Average(d => d.SolarValue);
+                            break;
+                        case "Sum":
+                            newPoint.EonValue = group.Sum(d => d.EonValue);
+                            newPoint.SolarValue = group.Sum(d => d.SolarValue);
+                            break;
+                        case "Max":
+                            newPoint.EonValue = group.Max(d => d.EonValue);
+                            newPoint.SolarValue = group.Max(d => d.SolarValue);
+                            break;
+                        case "Min":
+                            newPoint.EonValue = group.Min(d => d.EonValue);
+                            newPoint.SolarValue = group.Min(d => d.SolarValue);
+                            break;
+                    }
+
+                    convertedData.Add(newPoint);
+                }
+
+                // Sort by timestamp
+                return convertedData.OrderBy(d => d.Timestamp).ToList();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error during data conversion: {ex.Message}", "Conversion Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return new List<DataPoint>();
+            }
+        }
         private IEnumerable<IGrouping<DateTime, DataPoint>> GroupDataByInterval(List<DataPoint> data, string interval)
         {
             switch (interval)
@@ -520,10 +577,98 @@ namespace excelconverter
             }
         }
 
+        private void DetectAndSetDateFormat(ExcelWorksheet worksheet, int dateColumnIndex)
+        {
+            try
+            {
+                // Get a few sample dates from the column
+                List<string> sampleDates = new List<string>();
+                int maxSamples = 5;
+                int count = 0;
+
+                for (int row = 2; row <= worksheet.Dimension.End.Row && count < maxSamples; row++)
+                {
+                    string dateText = worksheet.Cells[row, dateColumnIndex].Text;
+                    if (!string.IsNullOrWhiteSpace(dateText))
+                    {
+                        sampleDates.Add(dateText);
+                        count++;
+                    }
+                }
+
+                if (sampleDates.Count == 0)
+                    return;
+
+                // Define formats to test
+                string[] dateFormats = new[]
+                {
+            "MM/dd/yyyy HH:mm:ss",
+            "dd/MM/yyyy HH:mm:ss",
+            "MM/dd/yy HH:mm",
+            "dd/MM/yyyy HH:mm",
+            "yyyy-MM-dd HH:mm",
+            "MM/dd/yyyy HH:mm",
+        };
+
+                // Count successful parses for each format
+                Dictionary<string, int> formatSuccessCount = new Dictionary<string, int>();
+                foreach (var format in dateFormats)
+                {
+                    formatSuccessCount[format] = 0;
+                }
+
+                // Test each sample with each format
+                foreach (string dateStr in sampleDates)
+                {
+                    foreach (string format in dateFormats)
+                    {
+                        if (DateTime.TryParseExact(dateStr, format, CultureInfo.InvariantCulture,
+                            DateTimeStyles.None, out _))
+                        {
+                            formatSuccessCount[format]++;
+                        }
+                    }
+                }
+
+                // Find the format with most successful parses
+                string bestFormat = dateFormats[0];
+                int maxSuccesses = 0;
+
+                foreach (var kvp in formatSuccessCount)
+                {
+                    if (kvp.Value > maxSuccesses)
+                    {
+                        maxSuccesses = kvp.Value;
+                        bestFormat = kvp.Key;
+                    }
+                }
+
+                // If we found a likely format, select it in the combobox
+                if (maxSuccesses > 0)
+                {
+                    foreach (ComboBoxItem item in cboDateFormat.Items)
+                    {
+                        if (item.Content.ToString() == bestFormat)
+                        {
+                            cboDateFormat.SelectedItem = item;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Just log the error but don't disrupt the flow
+                Console.WriteLine($"Error detecting date format: {ex.Message}");
+            }
+        }
+
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
             Close();
         }
+
+
     }
 
     public class DataPoint
