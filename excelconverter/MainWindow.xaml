@@ -116,7 +116,8 @@
                             <Label Content="Add Data Column:" VerticalAlignment="Center" Width="120"/>
                             <ComboBox x:Name="cboAddDataColumn" Width="200" Padding="5" Margin="0,0,10,0"/>
                             <Button x:Name="btnAddDataColumn" Content="Add" Padding="10,5" Click="AddDataColumn_Click"/>
-                            <Button x:Name="btnFinishAdding" Content="Nem szeretnék többet" Padding="10,5" Margin="10,0,0,0" Click="FinishAddingColumns_Click"/>
+                            <Button x:Name="btnFinishAdding" Content="
+I don't want any more" Padding="10,5" Margin="10,0,0,0" Click="FinishAddingColumns_Click"/>
                         </StackPanel>
 
                         <!-- Selected Data Columns -->
