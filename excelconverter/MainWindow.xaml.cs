@@ -250,22 +250,73 @@ namespace excelconverter
 
             // Read data rows (start from row 2, assuming row 1 has headers)
             int rowCount = worksheet.Dimension.End.Row;
+
+            // Debug info - log first few rows for diagnostics
+            Console.WriteLine($"Reading data from {rowCount} rows");
+            Console.WriteLine($"Date column: {dateColumnIndex}, E.ON column: {eonColumnIndex}, Solar column: {solarColumnIndex}");
+
+            // Create a comprehensive list of date formats to try
+            string[] commonFormats = new[]
+            {
+                "MM/dd/yyyy HH:mm:ss",
+                "dd/MM/yyyy HH:mm:ss",
+                "MM/dd/yy HH:mm",
+                "dd/MM/yyyy HH:mm",
+                "yyyy-MM-dd HH:mm",
+                "MM/dd/yyyy HH:mm",
+                "yyyy-MM-dd HH:mm:ss",
+                "dd/MM/yyyy H:mm",
+                "MM/dd/yyyy H:mm",
+                "M/d/yyyy HH:mm:ss",
+                "d/M/yyyy HH:mm:ss",
+                "d/M/yyyy H:mm:ss",
+                "dd/MM/yyyy",
+                "MM/dd/yyyy",
+                "yyyy-MM-dd",
+                "dd.MM.yyyy HH:mm",
+                "dd.MM.yyyy HH:mm:ss"
+            };
+
+            int successfullyParsed = 0;
+            int failedToParse = 0;
+
             for (int row = 2; row <= rowCount; row++)
             {
-                var dateStr = worksheet.Cells[row, dateColumnIndex].Text;
-                var eonStr = worksheet.Cells[row, eonColumnIndex].Text;
-                var solarStr = worksheet.Cells[row, solarColumnIndex].Text;
+                var dateCell = worksheet.Cells[row, dateColumnIndex];
+                var eonCell = worksheet.Cells[row, eonColumnIndex];
+                var solarCell = worksheet.Cells[row, solarColumnIndex];
 
-                if (!string.IsNullOrWhiteSpace(dateStr))
+                // First check if the date cell contains a real Excel date
+                if (dateCell.Value is DateTime)
                 {
-                    try
+                    DateTime date = (DateTime)dateCell.Value;
+
+                    // Parse E.ON and Solar values with robust handling
+                    double eonValue = ParseNumericValue(eonCell);
+                    double solarValue = ParseNumericValue(solarCell);
+
+                    data.Add(new DataPoint
                     {
-                        // Get the selected date format
+                        Timestamp = date,
+                        EonValue = eonValue,
+                        SolarValue = solarValue
+                    });
+
+                    successfullyParsed++;
+                }
+                else
+                {
+                    // Try to parse as text
+                    var dateStr = dateCell.Text;
+
+                    if (!string.IsNullOrWhiteSpace(dateStr))
+                    {
+                        // First try with the user-selected format
                         var selectedDateFormat = cboDateFormat.Text;
                         DateTime date;
                         bool parsed = false;
 
-                        // First try with the user-selected format
+                        // Try the selected format first
                         if (DateTime.TryParseExact(dateStr, selectedDateFormat,
                             CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
                         {
@@ -273,23 +324,7 @@ namespace excelconverter
                         }
                         else
                         {
-                            // Define a larger set of formats to try
-                            string[] commonFormats = new[]
-                            {
-                        "MM/dd/yyyy HH:mm:ss", // Add this format for your second image
-                        "dd/MM/yyyy HH:mm:ss",
-                        "MM/dd/yy HH:mm",
-                        "dd/MM/yyyy HH:mm",
-                        "yyyy-MM-dd HH:mm",
-                        "MM/dd/yyyy HH:mm",
-                        "MM/dd/yy H:mm",
-                        "MM/dd/yyyy H:mm:ss",
-                        "M/d/yyyy HH:mm:ss",  // Add this format for flexibility
-                        "d/M/yyyy HH:mm:ss",
-                        "yyyy-MM-dd"
-                    };
-
-                            // Try each format
+                            // Try each format in our comprehensive list
                             foreach (var format in commonFormats)
                             {
                                 if (DateTime.TryParseExact(dateStr, format,
@@ -300,52 +335,95 @@ namespace excelconverter
                                 }
                             }
 
-                            // If all formats fail, try general parsing as last resort
+                            // If all specific formats fail, try general parsing as last resort
                             if (!parsed && DateTime.TryParse(dateStr, out date))
                             {
                                 parsed = true;
                             }
                         }
 
-                        if (!parsed)
+                        if (parsed)
                         {
-                            // Skip this row if date couldn't be parsed
-                            continue;
+                            // Successfully parsed date
+                            double eonValue = ParseNumericValue(eonCell);
+                            double solarValue = ParseNumericValue(solarCell);
+
+                            data.Add(new DataPoint
+                            {
+                                Timestamp = date,
+                                EonValue = eonValue,
+                                SolarValue = solarValue
+                            });
+
+                            successfullyParsed++;
                         }
-
-                        // Parse E.ON and Solar values
-                        double eonValue = 0;
-                        double solarValue = 0;
-
-                        if (!double.TryParse(eonStr, NumberStyles.Any, CultureInfo.InvariantCulture, out eonValue))
+                        else
                         {
-                            // Try with comma as decimal separator
-                            double.TryParse(eonStr.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out eonValue);
+                            failedToParse++;
+                            // Log the problematic date string for diagnostics
+                            if (failedToParse < 10)  // Limit logging to avoid console overflow
+                            {
+                                Console.WriteLine($"Failed to parse date at row {row}: '{dateStr}'");
+                            }
                         }
-
-                        if (!double.TryParse(solarStr, NumberStyles.Any, CultureInfo.InvariantCulture, out solarValue))
-                        {
-                            // Try with comma as decimal separator
-                            double.TryParse(solarStr.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out solarValue);
-                        }
-
-                        data.Add(new DataPoint
-                        {
-                            Timestamp = date,
-                            EonValue = eonValue,
-                            SolarValue = solarValue
-                        });
                     }
-                    catch (Exception ex)
-                    {
-                        // Log the error but continue processing other rows
-                        Console.WriteLine($"Error parsing row {row}: {ex.Message}");
-                    }
+                }
+            }
+
+            Console.WriteLine($"Successfully parsed {successfullyParsed} rows, failed to parse {failedToParse} rows");
+
+            // Log some sample data for verification
+            if (data.Count > 0)
+            {
+                Console.WriteLine("First 5 parsed data points:");
+                for (int i = 0; i < Math.Min(5, data.Count); i++)
+                {
+                    Console.WriteLine($"{data[i].Timestamp:yyyy-MM-dd HH:mm:ss} - E.ON: {data[i].EonValue}, Solar: {data[i].SolarValue}");
                 }
             }
 
             return data;
         }
+
+        // Helper method to parse numeric values with various formats
+        private double ParseNumericValue(ExcelRange cell)
+        {
+            // If the cell contains a numeric value directly, use it
+            if (cell.Value is double doubleValue)
+            {
+                return doubleValue;
+            }
+
+            // Try to parse the text value
+            string valueStr = cell.Text;
+            double result = 0;
+
+            // First try standard parsing with invariant culture
+            if (!string.IsNullOrWhiteSpace(valueStr) &&
+                !double.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out result))
+            {
+                // Try with different decimal separators
+                if (valueStr.Contains(',') && !valueStr.Contains('.'))
+                {
+                    // European format with comma as decimal separator
+                    double.TryParse(valueStr.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out result);
+                }
+                else if (valueStr.Contains('.') && valueStr.Contains(',') && valueStr.IndexOf(',') > valueStr.IndexOf('.'))
+                {
+                    // Format like "1.234,56"
+                    double.TryParse(valueStr.Replace(".", "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out result);
+                }
+                else
+                {
+                    // Try to remove any non-numeric characters except decimal separators
+                    string cleanValue = new string(valueStr.Where(c => char.IsDigit(c) || c == '.' || c == ',' || c == '-').ToArray());
+                    double.TryParse(cleanValue.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out result);
+                }
+            }
+
+            return result;
+        }
+
         private List<DataPoint> ConvertData(List<DataPoint> data, string inputInterval, string outputInterval)
         {
             var convertedData = new List<DataPoint>();
@@ -360,29 +438,27 @@ namespace excelconverter
             }
 
             // Log some data for debugging
-            Console.WriteLine($"Converting {data.Count} data points");
-            if (data.Count > 0)
-            {
-                Console.WriteLine($"First data point: {data[0].Timestamp} - E.ON: {data[0].EonValue}, Solar: {data[0].SolarValue}");
-                if (data.Count > 1)
-                    Console.WriteLine($"Second data point: {data[1].Timestamp} - E.ON: {data[1].EonValue}, Solar: {data[1].SolarValue}");
-            }
+            Console.WriteLine($"Converting {data.Count} data points using {aggregationMethod} aggregation");
+            Console.WriteLine($"Input interval: {inputInterval}, Output interval: {outputInterval}");
 
             try
             {
                 // Group the data by the appropriate time interval
                 var groupedData = GroupDataByInterval(data, outputInterval);
+                int groupCount = 0;
 
                 foreach (var group in groupedData)
                 {
-                    var newPoint = new DataPoint
-                    {
-                        Timestamp = group.Key
-                    };
+                    groupCount++;
 
                     // Skip empty groups
                     if (!group.Any())
                         continue;
+
+                    var newPoint = new DataPoint
+                    {
+                        Timestamp = group.Key
+                    };
 
                     // Apply aggregation method
                     switch (aggregationMethod)
@@ -408,31 +484,48 @@ namespace excelconverter
                     convertedData.Add(newPoint);
                 }
 
+                Console.WriteLine($"Created {groupCount} groups, resulted in {convertedData.Count} data points");
+
+                // Log a few converted data points for verification
+                var sortedResults = convertedData.OrderBy(d => d.Timestamp).ToList();
+                if (sortedResults.Count > 0)
+                {
+                    Console.WriteLine("First 5 converted data points:");
+                    for (int i = 0; i < Math.Min(5, sortedResults.Count); i++)
+                    {
+                        Console.WriteLine($"{sortedResults[i].Timestamp:yyyy-MM-dd HH:mm:ss} - E.ON: {sortedResults[i].EonValue:F2}, Solar: {sortedResults[i].SolarValue:F2}");
+                    }
+                }
+
                 // Sort by timestamp
-                return convertedData.OrderBy(d => d.Timestamp).ToList();
+                return sortedResults;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error during data conversion: {ex.Message}", "Conversion Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error during data conversion: {ex.Message}\n\nStack trace: {ex.StackTrace}",
+                    "Conversion Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return new List<DataPoint>();
             }
         }
+
         private IEnumerable<IGrouping<DateTime, DataPoint>> GroupDataByInterval(List<DataPoint> data, string interval)
         {
+            // First sort the data by timestamp to ensure proper grouping
+            var sortedData = data.OrderBy(d => d.Timestamp).ToList();
+
             switch (interval)
             {
                 case "15 Minutes":
-                    return data.GroupBy(d => new DateTime(
+                    return sortedData.GroupBy(d => new DateTime(
                         d.Timestamp.Year,
                         d.Timestamp.Month,
                         d.Timestamp.Day,
                         d.Timestamp.Hour,
-                        15 * (d.Timestamp.Minute / 15), // Round to nearest 15 min
+                        (d.Timestamp.Minute / 15) * 15, // Round down to nearest 15 min
                         0));
 
                 case "1 Hour":
-                    return data.GroupBy(d => new DateTime(
+                    return sortedData.GroupBy(d => new DateTime(
                         d.Timestamp.Year,
                         d.Timestamp.Month,
                         d.Timestamp.Day,
@@ -440,34 +533,30 @@ namespace excelconverter
                         0, 0));
 
                 case "1 Day":
-                    return data.GroupBy(d => new DateTime(
-                        d.Timestamp.Year,
-                        d.Timestamp.Month,
-                        d.Timestamp.Day,
-                        0, 0, 0));
+                    return sortedData.GroupBy(d => d.Timestamp.Date);
 
                 case "1 Week":
-                    return data.GroupBy(d => {
+                    return sortedData.GroupBy(d => {
                         // Calculate the start of the week (Sunday)
-                        int diff = (7 + (d.Timestamp.DayOfWeek - DayOfWeek.Sunday)) % 7;
+                        int diff = (int)d.Timestamp.DayOfWeek;
                         return d.Timestamp.Date.AddDays(-1 * diff);
                     });
 
                 case "1 Month":
-                    return data.GroupBy(d => new DateTime(
+                    return sortedData.GroupBy(d => new DateTime(
                         d.Timestamp.Year,
                         d.Timestamp.Month,
-                        1, 0, 0, 0));
+                        1));
 
                 case "Quarter Year":
-                    return data.GroupBy(d => {
+                    return sortedData.GroupBy(d => {
                         int quarter = (d.Timestamp.Month - 1) / 3;
-                        return new DateTime(d.Timestamp.Year, quarter * 3 + 1, 1, 0, 0, 0);
+                        return new DateTime(d.Timestamp.Year, quarter * 3 + 1, 1);
                     });
 
                 default:
                     // Default to hourly if something unexpected happens
-                    return data.GroupBy(d => new DateTime(
+                    return sortedData.GroupBy(d => new DateTime(
                         d.Timestamp.Year,
                         d.Timestamp.Month,
                         d.Timestamp.Day,
@@ -602,13 +691,13 @@ namespace excelconverter
                 // Define formats to test
                 string[] dateFormats = new[]
                 {
-            "MM/dd/yyyy HH:mm:ss",
-            "dd/MM/yyyy HH:mm:ss",
-            "MM/dd/yy HH:mm",
-            "dd/MM/yyyy HH:mm",
-            "yyyy-MM-dd HH:mm",
-            "MM/dd/yyyy HH:mm",
-        };
+                    "MM/dd/yyyy HH:mm:ss",
+                    "dd/MM/yyyy HH:mm:ss",
+                    "MM/dd/yy HH:mm",
+                    "dd/MM/yyyy HH:mm",
+                    "yyyy-MM-dd HH:mm",
+                    "MM/dd/yyyy HH:mm",
+                };
 
                 // Count successful parses for each format
                 Dictionary<string, int> formatSuccessCount = new Dictionary<string, int>();
